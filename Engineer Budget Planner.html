@@ -1,0 +1,693 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Engineer Budget Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: workbook-style planner. Settings and project summary on top, then one ledger grid per engineer (months across, cost elements down, budget and actual side by side). */
+:root {
+  --bg: #f1f4f3;
+  --surface: #ffffff;
+  --surface2: #f6f8f7;
+  --ink: #1a2327;
+  --muted: #586a70;
+  --line: #d6dddb;
+  --accent: #0e6a78;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0f0f2;
+  --actual: #edf4f6;
+  --ov: #fcefcc;
+  --ov-mark: #c47f0a;
+  --good: #1b7a49;
+  --bad: #b3372b;
+  --f-display: 'IBM Plex Sans Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-num: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101719; --surface: #172023; --surface2: #1c272b; --ink: #e3eaeb; --muted: #93a5aa;
+    --line: #2b393d; --accent: #4fb6c4; --accent-ink: #06191c; --accent-soft: #17353a; --actual: #1a2b31;
+    --ov: #3b3014; --ov-mark: #e0a23a; --good: #58c58b; --bad: #f0857a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101719; --surface: #172023; --surface2: #1c272b; --ink: #e3eaeb; --muted: #93a5aa;
+  --line: #2b393d; --accent: #4fb6c4; --accent-ink: #06191c; --accent-soft: #17353a; --actual: #1a2b31;
+  --ov: #3b3014; --ov-mark: #e0a23a; --good: #58c58b; --bad: #f0857a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 72px;
+}
+.wrap { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.top h1 { font-size: 26px; letter-spacing: .01em; }
+.top .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; min-width: 150px; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status.ok::before { background: var(--good); }
+.status.warn::before { background: var(--ov-mark); }
+
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px;
+  padding: 7px 12px; cursor: pointer; font-weight: 500; line-height: 1.2;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.sm { padding: 5px 9px; font-size: 12.5px; }
+.btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.icon { border: 0; background: transparent; cursor: pointer; width: 28px; height: 28px; border-radius: 6px; font-size: 14px; }
+.icon:hover { background: var(--accent-soft); }
+
+/* panels */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.panel > h2 { font-size: 17px; margin-bottom: 12px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.f > span { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.f input, .f select, .f textarea {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0;
+}
+.f input.mono, .mono { font-family: var(--f-num); }
+.check { flex-direction: row; align-items: center; gap: 8px; padding-top: 18px; }
+.check input { width: auto; }
+.check span { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); }
+.settings-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; }
+.partners { display: flex; flex-direction: column; gap: 8px; }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; gap: 8px; align-items: center; }
+.prow input { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 7px 9px; min-width: 0; width: 100%; }
+.warn-text { color: var(--bad); font-size: 12.5px; min-height: 18px; }
+.hint { color: var(--muted); font-size: 12.5px; }
+
+/* summary table */
+.tablewrap { overflow-x: auto; }
+table.sum { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.sum th, .sum td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.sum th:first-child, .sum td:first-child { text-align: left; }
+.sum thead th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 500; }
+.sum td { font-family: var(--f-num); }
+.sum td:first-child { font-family: var(--f-body); }
+.sum tr.strong td { font-weight: 600; background: var(--surface2); }
+.sum tr.group td { font-family: var(--f-body); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: transparent; padding-top: 12px; }
+.sum td.act, .sum th.act { background: var(--actual); }
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
+.dim { color: var(--muted); }
+
+/* engineer card */
+.eng { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.eh { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.eh-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nin { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.nin:hover { border-color: var(--line); }
+.nin.title { font-family: var(--f-display); font-weight: 600; font-size: 20px; flex: 1 1 200px; }
+.eh-actions { display: flex; gap: 6px; }
+.ekpi { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.ekpi div { display: flex; flex-direction: column; }
+.ekpi small { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ekpi b { font-family: var(--f-num); font-weight: 500; font-size: 15px; }
+.ebody { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ledger grid */
+.gridwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table.grid { border-collapse: separate; border-spacing: 0; font-size: 13px; min-width: 100%; }
+.grid th, .grid td { padding: 0 6px; height: 34px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--surface); }
+.grid thead th {
+  background: var(--surface2); font-weight: 500; color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; text-align: right; height: 30px;
+}
+.grid thead th.l { text-align: left; }
+.grid thead th.mh { text-align: center; color: var(--ink); border-left: 1px solid var(--line); line-height: 1.2; padding-block: 4px; height: auto; }
+.grid thead th.mh small { display: block; font-size: 10.5px; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.grid .stick { position: sticky; left: 0; z-index: 2; min-width: 220px; max-width: 220px; box-shadow: 1px 0 0 var(--line); text-align: left; }
+.grid thead .stick { z-index: 3; background: var(--surface2); }
+.grid td.num { text-align: right; font-family: var(--f-num); padding-inline: 10px; }
+.grid td.inc { position: relative; padding: 0 2px; }
+.grid td.act, .grid th.act { background: var(--actual); }
+.grid thead th.act { background: var(--actual); }
+.grid td.mstart { border-left: 1px solid var(--line); }
+.grid tr.sec td { height: 26px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface2); font-weight: 500; }
+.grid tr.sec td.stick { background: var(--surface2); }
+.grid tr.tot td { font-weight: 600; border-top: 1px solid var(--ink); }
+.grid tr.marg td { font-weight: 600; background: var(--accent-soft); }
+.grid tr.marg td.stick { background: var(--accent-soft); }
+.grid tr.part td { color: var(--muted); font-size: 12.5px; }
+.grid td.tot { border-left: 1px solid var(--line); }
+.cin {
+  width: 82px; text-align: right; font-family: var(--f-num); font-size: 13px; background: transparent;
+  border: 1px solid transparent; border-radius: 4px; padding: 5px 6px;
+}
+.cin:hover { border-color: var(--line); }
+.cin:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
+.cin.bad, .nin.bad, .f input.bad { border-color: var(--bad); }
+td.ovc { background: var(--ov); }
+td.ovc::after { content: ""; position: absolute; top: 0; right: 0; border-top: 7px solid var(--ov-mark); border-left: 7px solid transparent; }
+.grid .nin { width: 100%; font-size: 13px; padding: 5px 6px; }
+.grid select { border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 5px 2px; font-size: 12.5px; max-width: 140px; }
+.grid select:hover { border-color: var(--line); }
+.grid .amt { width: 118px; }
+.toast[hidden] { display: none; }
+.dash { color: var(--muted); padding-inline: 8px; }
+.delrow { border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; width: 28px; height: 28px; border-radius: 4px; }
+.delrow:hover { color: var(--bad); background: var(--surface2); }
+.addbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.addbar .hint { margin-left: auto; }
+.empty { padding: 22px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
+.addeng { display: flex; justify-content: flex-start; }
+
+.toast {
+  position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; display: flex; gap: 14px; align-items: center; z-index: 20;
+  max-width: calc(100% - 32px);
+}
+.toast button { background: transparent; border: 0; color: var(--bg); text-decoration: underline; cursor: pointer; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .top h1 { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap" id="app"></div>
+<div id="toast" class="toast" hidden></div>
+<input type="file" id="importfile" accept=".json,application/json" hidden>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'engineer-budget-v1';
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var uid = function () { return Math.random().toString(36).slice(2, 9); };
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+
+  /* ---------- number formatting ---------- */
+  var nfp = new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 0 });
+  var nfh = new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 1 });
+  var nfi = new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 2, useGrouping: false });
+  var cur0 = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  var cur2 = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var fP = function (v) { return nfp.format(Math.round(v) + 0); };
+  var fH = function (v) { return nfh.format(Math.round(v * 10) / 10 + 0); };
+  var fC0 = function (v) { return cur0.format(Math.round(v) + 0); };
+  var fC2 = function (v) { return cur2.format(Math.round(v * 100) / 100 + 0); };
+  var fPct = function (v) { return (Math.round(v * 1000) / 10 + 0).toFixed(1).replace('.', ',') + '%'; };
+  var signed = function (v, f, tol) {
+    if (v == null || !isFinite(v)) return '';
+    var s = Math.abs(v) < tol ? '' : (v > 0 ? '+' : '−');
+    return s + f(Math.abs(v));
+  };
+
+  /* ---------- safe arithmetic (amounts can be typed as 278+250+250) ---------- */
+  function evalExpr(src) {
+    var s = String(src).replace(/,/g, '.').replace(/\s+/g, ''), i = 0;
+    function fail() { throw 0; }
+    function expr() { var v = term(); while (s[i] === '+' || s[i] === '-') { var op = s[i++]; var r = term(); v = op === '+' ? v + r : v - r; } return v; }
+    function term() { var v = factor(); while (s[i] === '*' || s[i] === '/') { var op = s[i++]; var r = factor(); v = op === '*' ? v * r : v / r; } return v; }
+    function factor() {
+      if (s[i] === '-') { i++; return -factor(); }
+      if (s[i] === '+') { i++; return factor(); }
+      if (s[i] === '(') { i++; var v = expr(); if (s[i] !== ')') fail(); i++; return v; }
+      var m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i)); if (!m) fail();
+      i += m[0].length; return parseFloat(m[0]);
+    }
+    try { var v = expr(); return (i === s.length && isFinite(v)) ? v : NaN; } catch (e) { return NaN; }
+  }
+  function num(v) { if (v === '' || v == null) return null; if (typeof v === 'number') return v; return evalExpr(v); }
+  function ok(x) { return x != null && !isNaN(x); }
+  function val(v, d) { var x = num(v); return ok(x) ? x : (d || 0); }
+
+  /* ---------- dates ---------- */
+  var DAY = 864e5;
+  function pd(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; }
+  function iso(ms) { var d = new Date(ms); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+  var monthFmt = new Intl.DateTimeFormat('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+  function monthsOf(e, p) {
+    var a = pd(e.start), b = pd(e.end); if (a == null || b == null || b < a) return [];
+    var out = [], d = new Date(a), y = d.getUTCFullYear(), m = d.getUTCMonth(), eb = new Date(b), ey = eb.getUTCFullYear(), em = eb.getUTCMonth(), idx = 0;
+    while ((y < ey || (y === ey && m <= em)) && idx < 120) {
+      var ms = Date.UTC(y, m, 1), me = Date.UTC(y, m + 1, 0), dim = (me - ms) / DAY + 1;
+      var s = Math.max(a, ms), t = Math.min(b, me), days = (t - s) / DAY + 1;
+      out.push({ ym: y + '-' + String(m + 1).padStart(2, '0'), label: monthFmt.format(new Date(ms)), frac: p.prorate ? days / dim : 1, days: days, dim: dim, i: idx++ });
+      m++; if (m > 11) { m = 0; y++; }
+    }
+    return out;
+  }
+
+  /* ---------- state ---------- */
+  function mkCost(name, type, amount, month) { return { id: uid(), name: name, type: type, amount: String(amount), month: month || 1, ov: {}, act: {} }; }
+  function sample() {
+    return {
+      v: 1, ui: { showActuals: true },
+      project: {
+        name: 'Engineering project', rate: '52', hours: '200', prorate: true, horizon: 3,
+        notes: '200 hours per month. Overtime not included.',
+        partners: [{ id: uid(), name: 'Detacta', pct: 50 }, { id: uid(), name: 'ITWW', pct: 50 }]
+      },
+      engineers: [{
+        id: uid(), name: 'Engineer 1', start: '2026-12-01', end: '2027-05-31', hours: '', rate: '', collapsed: false, ovHours: {}, actHours: {},
+        costs: [
+          mkCost('agent fees recruitment', 'once', 350),
+          mkCost('visa aanvraag', 'once', 500),
+          mkCost('twv aanvraag', 'once', 500),
+          mkCost('vliegticket', 'once', 1200),
+          mkCost('certificeringen (VCA / IPAF / NEN)', 'once', '278+250+250'),
+          mkCost('PBM', 'once', 750),
+          mkCost('visa aanvraag (maand 4)', 'once', 500, 4),
+          mkCost('twv aanvraag (maand 4)', 'once', 500, 4),
+          mkCost('vliegticket (maand 4)', 'once', 1200, 4),
+          mkCost('verzekeringen', 'monthly', 400),
+          mkCost('transport woon werkverkeer', 'monthly', 500),
+          mkCost('eetvergoeding', 'monthly', 600),
+          mkCost('huisvesting', 'monthly', 1000),
+          mkCost('salaris', 'monthly', 1800),
+          mkCost('onvoorzien', 'monthly', 200)
+        ]
+      }]
+    };
+  }
+  function norm(s) {
+    var d = sample();
+    if (!s || typeof s !== 'object' || !Array.isArray(s.engineers)) return d;
+    s.ui = s.ui || { showActuals: true };
+    s.project = Object.assign({}, d.project, s.project || {});
+    if (!Array.isArray(s.project.partners)) s.project.partners = d.project.partners;
+    s.project.partners.forEach(function (p) { p.id = p.id || uid(); });
+    s.engineers.forEach(function (e) {
+      e.id = e.id || uid(); e.costs = Array.isArray(e.costs) ? e.costs : [];
+      e.ovHours = e.ovHours || {}; e.actHours = e.actHours || {};
+      e.costs.forEach(function (c) { c.id = c.id || uid(); c.ov = c.ov || {}; c.act = c.act || {}; c.type = c.type || 'monthly'; c.month = c.month || 1; });
+    });
+    return s;
+  }
+  var state = sample();
+  var dirty = false, dbh = null, lastSnap = null, focusRow = null;
+
+  var P = function () { return state.project; };
+  var engOf = function (id) { return state.engineers.filter(function (e) { return e.id === id; })[0]; };
+  var costOf = function (e, id) { return e.costs.filter(function (c) { return c.id === id; })[0]; };
+
+  /* ---------- calculations ---------- */
+  function compute(e, p) {
+    var months = monthsOf(e, p), n = months.length;
+    var rN = num(e.rate), rate = ok(rN) ? rN : val(p.rate);
+    var hN = num(e.hours), hpm = ok(hN) ? hN : val(p.hours);
+    var R = {}, parts = p.partners;
+
+    var hovRaw = months.map(function (m) { return e.ovHours[m.ym]; });
+    var hb = months.map(function (m, i) { var o = num(hovRaw[i]); return ok(o) ? o : hpm * m.frac; });
+    var ha = months.map(function (m) { var x = num(e.actHours[m.ym]); return ok(x) ? x : null; });
+    R.hours = { b: hb, a: ha, dir: 0, ovRaw: hovRaw };
+
+    var costRows = e.costs.map(function (c) {
+      var amt = val(c.amount), mi = Math.max(1, parseInt(c.month, 10) || 1) - 1;
+      var raw = months.map(function (m) { return c.ov[m.ym]; });
+      var b = months.map(function (m, i) {
+        var o = num(raw[i]); if (ok(o)) return o;
+        if (c.type === 'once') return i === mi ? amt : 0;
+        if (c.type === 'hourly') return amt * hb[i];
+        return amt * m.frac;
+      });
+      var a = months.map(function (m) { var x = num(c.act[m.ym]); return ok(x) ? x : null; });
+      var row = { b: b, a: a, dir: -1, ovRaw: raw };
+      R[c.id] = row; return row;
+    });
+
+    var closed = months.map(function (m, i) { return ha[i] != null || costRows.some(function (r) { return r.a[i] != null; }); });
+    var revB = hb.map(function (h) { return h * rate; });
+    var revA = months.map(function (m, i) { return closed[i] ? (ha[i] || 0) * rate : null; });
+    var tcB = months.map(function (m, i) { return costRows.reduce(function (s, r) { return s + r.b[i]; }, 0); });
+    var tcA = months.map(function (m, i) { return closed[i] ? costRows.reduce(function (s, r) { return s + (r.a[i] || 0); }, 0) : null; });
+    var mB = revB.map(function (v, i) { return v - tcB[i]; });
+    var mA = months.map(function (m, i) { return closed[i] ? revA[i] - tcA[i] : null; });
+    R.rev = { b: revB, a: revA, dir: 1 }; R.tc = { b: tcB, a: tcA, dir: -1 }; R.margin = { b: mB, a: mA, dir: 1 };
+    parts.forEach(function (pt, k) {
+      var f = (+pt.pct || 0) / 100;
+      R['p' + k] = { b: mB.map(function (v) { return v * f; }), a: mA.map(function (v) { return v == null ? null : v * f; }), dir: 1 };
+    });
+    return { months: months, n: n, rate: rate, hpm: hpm, R: R, closed: closed, any: closed.some(Boolean), costRows: costRows };
+  }
+  function aggRow(c, row) {
+    var bud = 0, to = 0, act = 0;
+    for (var i = 0; i < c.n; i++) { bud += row.b[i] || 0; if (c.closed[i]) { to += row.b[i] || 0; act += row.a[i] || 0; } }
+    var diff = act - to, v = row.dir === 0 ? diff : (row.dir > 0 ? diff : -diff);
+    return { bud: bud, to: to, act: act, v: v };
+  }
+  function scal(c, N) {
+    var S = function (arr, f) { var s = 0; for (var i = 0; i < arr.length; i++) if (f(i)) s += arr[i] || 0; return s; };
+    var first = function (i) { return i < N; }, cl = function (i) { return c.closed[i]; }, all = function () { return true; };
+    var mk = function (f, useA) { var k = useA ? 'a' : 'b'; return { h: S(c.R.hours[k], f), r: S(c.R.rev[k], f), c: S(c.R.tc[k], f) }; };
+    return { n: mk(first), full: mk(all), to: mk(cl), act: mk(cl, true), any: c.any };
+  }
+  function addG(a, b) { return { h: a.h + b.h, r: a.r + b.r, c: a.c + b.c }; }
+  function zeroS() { var z = function () { return { h: 0, r: 0, c: 0 }; }; return { n: z(), full: z(), to: z(), act: z(), any: false }; }
+
+  function sumRows(parts) {
+    var rows = [
+      { k: 'Hours', f: function (g) { return g.h; }, fmt: fH, dir: 0, tol: 0.05 },
+      { k: 'Revenue', f: function (g) { return g.r; }, fmt: fC0, dir: 1, tol: 0.5 },
+      { k: 'Costs', f: function (g) { return g.c; }, fmt: fC0, dir: -1, tol: 0.5 },
+      { k: 'Margin', f: function (g) { return g.r - g.c; }, fmt: fC0, dir: 1, tol: 0.5, strong: true },
+      { k: 'Margin %', f: function (g) { return g.r ? (g.r - g.c) / g.r : null; }, fmt: fPct, dir: 1, tol: 0.0005, pts: true },
+      { g: 'Per hour' },
+      { k: 'Cost per hour', f: function (g) { return g.h ? g.c / g.h : null; }, fmt: fC2, dir: -1, tol: 0.005 },
+      { k: 'Revenue per hour', f: function (g) { return g.h ? g.r / g.h : null; }, fmt: fC2, dir: 1, tol: 0.005 },
+      { k: 'Margin per hour', f: function (g) { return g.h ? (g.r - g.c) / g.h : null; }, fmt: fC2, dir: 1, tol: 0.005, strong: true },
+      { g: 'Margin split' }
+    ];
+    parts.forEach(function (pt) {
+      rows.push({ k: (pt.name || 'Partner') + ' (' + (+pt.pct || 0) + '%)', f: function (g) { return (g.r - g.c) * (+pt.pct || 0) / 100; }, fmt: fC0, dir: 1, tol: 0.5 });
+    });
+    return rows;
+  }
+  function sumTable(S, parts) {
+    var N = Math.max(1, parseInt(P().horizon, 10) || 3);
+    var h = '<div class="tablewrap"><table class="sum"><thead><tr><th></th><th>First ' + N + ' month' + (N === 1 ? '' : 's') + '</th><th>Full period</th><th>Budget to date</th><th class="act">Actual to date</th><th class="act">Variance</th></tr></thead><tbody>';
+    sumRows(parts).forEach(function (r) {
+      if (r.g) { h += '<tr class="group"><td colspan="6">' + r.g + '</td></tr>'; return; }
+      var f = function (g) { var v = r.f(g); return v == null ? '–' : r.fmt(v); };
+      var va = '', cls = '';
+      if (S.any) {
+        var x = r.f(S.act), y = r.f(S.to);
+        if (x != null && y != null) {
+          var d = x - y; va = r.pts ? signed(d * 100, function (v) { return v.toFixed(1).replace('.', ','); }, 0.05) + ' pt' : signed(d, r.fmt, r.tol);
+          var fav = r.dir * d; cls = r.dir === 0 || Math.abs(d) < r.tol ? '' : (fav > 0 ? 'pos' : 'neg');
+        }
+      }
+      h += '<tr' + (r.strong ? ' class="strong"' : '') + '><td>' + esc(r.k) + '</td><td>' + f(S.n) + '</td><td>' + f(S.full) + '</td><td>' + (S.any ? f(S.to) : '<span class="dim">–</span>') + '</td><td class="act">' + (S.any ? f(S.act) : '<span class="dim">–</span>') + '</td><td class="act ' + cls + '">' + (va || '<span class="dim">–</span>') + '</td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  /* ---------- rendering ---------- */
+  var TYPES = [['once', 'One-time (€)'], ['monthly', 'Monthly (€/mo)'], ['hourly', 'Per hour (€/h)']];
+
+  function headerHTML() {
+    return '<div class="top"><div><h1>Engineer Budget Planner</h1><div class="sub">Budget and actuals per engineer, based on sales rate, one-time costs and monthly costs.</div></div>' +
+      '<div class="tools"><span id="status" class="status"></span>' +
+      '<button class="btn" data-act="toggle-actuals" aria-pressed="' + !!state.ui.showActuals + '">Show actuals</button>' +
+      '<button class="btn" data-act="export">Export</button><button class="btn" data-act="import">Import</button>' +
+      '<button class="btn" data-act="reset" id="resetbtn">Reset to example</button></div></div>';
+  }
+  function settingsHTML() {
+    var p = P();
+    var parts = p.partners.map(function (pt, k) {
+      return '<div class="prow"><input data-pt="name" data-k="' + k + '" value="' + esc(pt.name) + '" aria-label="Partner name"><input class="mono" data-pt="pct" data-k="' + k + '" inputmode="decimal" value="' + esc(pt.pct) + '" aria-label="Share in percent"><button class="btn sm" data-act="del-partner" data-k="' + k + '" aria-label="Remove partner">Remove</button></div>';
+    }).join('');
+    return '<section class="panel"><h2>Project settings</h2><div class="settings-grid"><div style="display:flex;flex-direction:column;gap:12px;min-width:0">' +
+      '<div class="fields">' +
+      '<label class="f"><span>Project name</span><input data-pf="name" value="' + esc(p.name) + '"></label>' +
+      '<label class="f"><span>Sales rate (€/h)</span><input class="mono" data-pf="rate" inputmode="decimal" value="' + esc(p.rate) + '"></label>' +
+      '<label class="f"><span>Hours per month</span><input class="mono" data-pf="hours" inputmode="decimal" value="' + esc(p.hours) + '"></label>' +
+      '<label class="f"><span>Summary horizon (months)</span><input class="mono" data-pf="horizon" inputmode="numeric" value="' + esc(p.horizon) + '"></label>' +
+      '<label class="f check"><input type="checkbox" data-pf="prorate" ' + (p.prorate ? 'checked' : '') + '><span>Prorate partial months</span></label></div>' +
+      '<label class="f"><span>Assumptions</span><input data-pf="notes" value="' + esc(p.notes) + '"></label>' +
+      '<div class="hint">Rate and hours are defaults. Each engineer can override them below.</div></div>' +
+      '<div class="partners"><div class="f"><span>Margin split</span></div>' + parts +
+      '<div><button class="btn sm" data-act="add-partner">Add partner</button></div><div class="warn-text" id="pwarn"></div></div></div></section>';
+  }
+  function engHTML(e) {
+    var c = compute(e, P()), id = e.id, p = P();
+    var h = '<section class="eng" data-eid="' + id + '"><header class="eh"><div class="eh-top">' +
+      '<button class="icon" data-act="toggle-eng" data-eid="' + id + '" aria-expanded="' + !e.collapsed + '" aria-label="' + (e.collapsed ? 'Expand' : 'Collapse') + ' ' + esc(e.name) + '">' + (e.collapsed ? '▸' : '▾') + '</button>' +
+      '<input class="nin title" data-f="name" data-eid="' + id + '" value="' + esc(e.name) + '" aria-label="Engineer name">' +
+      '<div class="eh-actions"><button class="btn sm" data-act="dup-eng" data-eid="' + id + '">Duplicate</button><button class="btn sm danger" data-act="del-eng" data-eid="' + id + '">Remove</button></div></div>' +
+      '<div class="fields">' +
+      '<label class="f"><span>Start date</span><input type="date" data-f="start" data-eid="' + id + '" value="' + esc(e.start) + '"></label>' +
+      '<label class="f"><span>End date</span><input type="date" data-f="end" data-eid="' + id + '" value="' + esc(e.end) + '"></label>' +
+      '<label class="f"><span>Hours per month</span><input class="mono" inputmode="decimal" data-f="hours" data-eid="' + id + '" placeholder="' + esc(p.hours) + ' (default)" value="' + esc(e.hours) + '"></label>' +
+      '<label class="f"><span>Sales rate (€/h)</span><input class="mono" inputmode="decimal" data-f="rate" data-eid="' + id + '" placeholder="' + esc(p.rate) + ' (default)" value="' + esc(e.rate) + '"></label></div>' +
+      '<div class="ekpi" data-e="' + id + '"></div></header>';
+    if (!e.collapsed) h += '<div class="ebody">' + (c.n ? gridHTML(e, c) : '<div class="empty">Set a start date and an end date after it to build the monthly grid.</div>') +
+      (state.engineers.length > 1 ? '<div class="esum" data-e="' + id + '"></div>' : '') + '</div>';
+    return h + '</section>';
+  }
+  function gridHTML(e, c) {
+    var id = e.id, A = !!state.ui.showActuals, parts = P().partners, n = c.n, span = A ? 2 : 1;
+    var key = function (rk, kind, i) { return id + '|' + rk + '|' + kind + (i == null ? '' : '|' + i); };
+    var h = '<div class="gridwrap" data-eid="' + id + '"><table class="grid"><thead><tr>' +
+      '<th class="stick l" rowspan="2">Element</th><th class="l" rowspan="2">Type</th><th rowspan="2">Amount</th><th class="l" rowspan="2">Month</th>';
+    c.months.forEach(function (m) {
+      h += '<th class="mh" colspan="' + span + '">' + m.label + '<small>m' + (m.i + 1) + (m.frac < 0.9999 && P().prorate ? ' · ' + m.days + '/' + m.dim + ' d' : '') + '</small></th>';
+    });
+    h += '<th class="mh" colspan="' + (A ? 3 : 1) + '">Total</th><th rowspan="2"></th></tr><tr>';
+    c.months.forEach(function () { h += '<th>Budget</th>' + (A ? '<th class="act">Actual</th>' : ''); });
+    h += '<th>Budget</th>' + (A ? '<th class="act">Actual</th><th class="act">Variance</th>' : '') + '</tr></thead><tbody>';
+
+    var tot = function (rk, cls) {
+      return '<td class="num tot ' + (cls || '') + '"><span data-c="' + key(rk, 'tb') + '"></span></td>' +
+        (A ? '<td class="num act"><span data-c="' + key(rk, 'ta') + '"></span></td><td class="num act"><span data-c="' + key(rk, 'tv') + '"></span></td>' : '');
+    };
+    var calcRow = function (rk, label, cls, lblAttr) {
+      var r = '<tr class="' + cls + '"><td class="stick"' + '><span ' + (lblAttr || '') + '>' + label + '</span></td><td></td><td></td><td></td>';
+      c.months.forEach(function (m, i) {
+        r += '<td class="num mstart"><span data-c="' + key(rk, 'b', i) + '"></span></td>' + (A ? '<td class="num act"><span data-c="' + key(rk, 'a', i) + '"></span></td>' : '');
+      });
+      return r + tot(rk) + '<td></td></tr>';
+    };
+    var inputRow = function (rk, nameHTML, typeHTML, amtHTML, monHTML, delHTML, getAct, labelName) {
+      var r = '<tr><td class="stick">' + nameHTML + '</td><td>' + typeHTML + '</td><td>' + amtHTML + '</td><td>' + monHTML + '</td>';
+      c.months.forEach(function (m, i) {
+        r += '<td class="inc mstart"><input class="cin" inputmode="decimal" data-in="ov" data-eid="' + id + '" data-rid="' + rk + '" data-ym="' + m.ym + '" data-c="' + key(rk, 'b', i) + '" aria-label="' + esc(labelName) + ' budget ' + m.label + '"></td>';
+        if (A) r += '<td class="inc act"><input class="cin" inputmode="decimal" data-in="act" data-eid="' + id + '" data-rid="' + rk + '" data-ym="' + m.ym + '" value="' + esc(getAct(m.ym)) + '" aria-label="' + esc(labelName) + ' actual ' + m.label + '"></td>';
+      });
+      return r + tot(rk) + '<td>' + delHTML + '</td></tr>';
+    };
+
+    h += '<tr class="sec"><td class="stick">Revenue</td><td colspan="' + (3 + n * span + (A ? 3 : 1) + 1) + '"></td></tr>';
+    h += inputRow('hours', 'Hours', '', '', '', '', function (ym) { return e.actHours[ym] == null ? '' : e.actHours[ym]; }, 'Hours');
+    h += calcRow('rev', 'Revenue (hours × rate)', '');
+    h += '<tr class="sec"><td class="stick">Costs</td><td colspan="' + (3 + n * span + (A ? 3 : 1) + 1) + '"></td></tr>';
+    e.costs.forEach(function (cs) {
+      var nameH = '<input class="nin" data-rf="name" data-eid="' + id + '" data-rid="' + cs.id + '" value="' + esc(cs.name) + '" aria-label="Cost element name" placeholder="Cost element">';
+      var typeH = '<select data-rf="type" data-eid="' + id + '" data-rid="' + cs.id + '" aria-label="Cost type">' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (cs.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>';
+      var amtH = '<input class="cin amt" inputmode="decimal" data-rf="amount" data-eid="' + id + '" data-rid="' + cs.id + '" value="' + esc(cs.amount) + '" aria-label="Amount for ' + esc(cs.name) + '">';
+      var monH = '<span class="dash">–</span>';
+      if (cs.type === 'once') {
+        var mx = Math.max(n, parseInt(cs.month, 10) || 1), o = '';
+        for (var k = 1; k <= mx; k++) o += '<option value="' + k + '"' + (k === (parseInt(cs.month, 10) || 1) ? ' selected' : '') + '>' + (k <= n ? 'm' + k + ' · ' + c.months[k - 1].label : 'm' + k + ' (outside)') + '</option>';
+        monH = '<select data-rf="month" data-eid="' + id + '" data-rid="' + cs.id + '" aria-label="Month of one-time cost">' + o + '</select>';
+      }
+      h += inputRow(cs.id, nameH, typeH, amtH, monH, '<button class="delrow" data-act="del-row" data-eid="' + id + '" data-rid="' + cs.id + '" aria-label="Remove ' + esc(cs.name) + '">×</button>', function (ym) { return cs.act[ym] == null ? '' : cs.act[ym]; }, cs.name || 'Cost');
+    });
+    h += calcRow('tc', 'Total costs', 'tot');
+    h += calcRow('margin', 'Margin', 'marg');
+    parts.forEach(function (pt, k) { h += calcRow('p' + k, esc(pt.name || 'Partner') + ' (' + (+pt.pct || 0) + '%)', 'part', 'data-pl="' + k + '"'); });
+    h += '</tbody></table></div>';
+    h += '<div class="addbar"><button class="btn sm" data-act="add-row" data-type="once" data-eid="' + id + '">+ One-time cost</button><button class="btn sm" data-act="add-row" data-type="monthly" data-eid="' + id + '">+ Monthly cost</button><button class="btn sm" data-act="add-row" data-type="hourly" data-eid="' + id + '">+ Per-hour cost</button>' +
+      '<span class="hint">Click any budget cell to override one month. Clear it to go back to the formula. Orange corner = overridden.</span></div>';
+    return h;
+  }
+
+  function render() {
+    var sx = window.scrollY, sc = {};
+    $$('.gridwrap').forEach(function (w) { sc[w.dataset.eid] = w.scrollLeft; });
+    $('#app').innerHTML = headerHTML() + settingsHTML() +
+      '<section class="panel"><h2>Project summary</h2><div id="psum"></div><p class="hint" style="margin:10px 0 0">Budget to date and Variance only cover months where you entered an actual. Empty cells in those months count as 0. A positive variance is better than budget.</p></section>' +
+      state.engineers.map(engHTML).join('') +
+      '<div class="addeng"><button class="btn primary" data-act="add-eng">Add engineer</button></div>';
+    $$('.gridwrap').forEach(function (w) { if (sc[w.dataset.eid]) w.scrollLeft = sc[w.dataset.eid]; });
+    window.scrollTo(0, sx);
+    paint(); setStatus(statusText, statusKind);
+    if (focusRow) { var el = $('[data-rf="name"][data-rid="' + focusRow + '"]'); if (el) { el.focus(); el.select(); } focusRow = null; }
+  }
+
+  function setCell(el, text, cls) {
+    if (el.textContent !== text) el.textContent = text;
+    el.className = cls || '';
+  }
+  function paint() {
+    var cache = {};
+    state.engineers.forEach(function (e) { cache[e.id] = compute(e, P()); });
+    $$('[data-c]').forEach(function (el) {
+      var parts = el.dataset.c.split('|'), c = cache[parts[0]]; if (!c) return;
+      var rk = parts[1], kind = parts[2], i = +parts[3], row = c.R[rk]; if (!row) return;
+      var fmt = rk === 'hours' ? fH : fP;
+      if (kind === 'b' || kind === 'a') {
+        var v = row[kind][i];
+        if (el.tagName === 'INPUT') {
+          var raw = row.ovRaw && row.ovRaw[i], has = raw != null && raw !== '';
+          el.parentElement.classList.toggle('ovc', has);
+          el.classList.toggle('bad', has && isNaN(num(raw)));
+          if (document.activeElement !== el) el.value = has ? raw : nfi.format(Math.round(v * 100) / 100 + 0);
+          el.title = has ? 'Overridden. Clear the cell to use the formula (' + nfi.format(v) + ').' : '';
+        } else setCell(el, v == null ? '' : fmt(v), v != null && v < 0 ? 'neg' : '');
+        return;
+      }
+      var g = aggRow(c, row);
+      if (kind === 'tb') setCell(el, fmt(g.bud), g.bud < 0 ? 'neg' : '');
+      else if (kind === 'ta') setCell(el, c.any ? fmt(g.act) : '', '');
+      else if (kind === 'tv') {
+        var tol = rk === 'hours' ? 0.05 : 0.5;
+        setCell(el, c.any ? signed(g.v, fmt, tol) : '', !c.any || row.dir === 0 || Math.abs(g.v) < tol ? '' : (g.v > 0 ? 'pos' : 'neg'));
+        el.title = c.any ? 'Compared with budget to date: ' + fmt(g.to) : '';
+      }
+    });
+    var N = Math.max(1, parseInt(P().horizon, 10) || 3), PS = zeroS();
+    state.engineers.forEach(function (e) {
+      var c = cache[e.id], S = scal(c, N);
+      ['n', 'full', 'to', 'act'].forEach(function (k) { PS[k] = addG(PS[k], S[k]); });
+      PS.any = PS.any || S.any;
+      var k = $('.ekpi[data-e="' + e.id + '"]');
+      if (k) {
+        var m = S.full.r - S.full.c;
+        k.innerHTML = '<div><small>Period</small><b>' + (c.n ? c.n + ' month' + (c.n === 1 ? '' : 's') + ' · ' + c.months[0].label + ' – ' + c.months[c.n - 1].label : '–') + '</b></div>' +
+          '<div><small>Hours</small><b>' + fH(S.full.h) + '</b></div><div><small>Revenue</small><b>' + fC0(S.full.r) + '</b></div><div><small>Costs</small><b>' + fC0(S.full.c) + '</b></div>' +
+          '<div><small>Margin</small><b class="' + (m < 0 ? 'neg' : '') + '">' + fC0(m) + '</b></div><div><small>Margin per hour</small><b>' + (S.full.h ? fC2(m / S.full.h) : '–') + '</b></div>';
+      }
+      var es = $('.esum[data-e="' + e.id + '"]'); if (es) es.innerHTML = '<h3 style="font-size:15px;margin-bottom:8px">' + esc(e.name || 'Engineer') + ' summary</h3>' + sumTable(S, P().partners);
+    });
+    var ps = $('#psum'); if (ps) ps.innerHTML = sumTable(PS, P().partners);
+    $$('[data-pl]').forEach(function (el) { var pt = P().partners[+el.dataset.pl]; if (pt) el.textContent = (pt.name || 'Partner') + ' (' + (+pt.pct || 0) + '%)'; });
+    var tot = P().partners.reduce(function (s, p) { return s + (+p.pct || 0); }, 0), w = $('#pwarn');
+    if (w) w.textContent = Math.abs(tot - 100) > 0.001 ? 'Shares add up to ' + tot + '%, not 100%.' : '';
+  }
+
+  /* ---------- storage ---------- */
+  var statusText = 'Loading saved budget…', statusKind = '', saveTimer = null;
+  function setStatus(t, k) { statusText = t; statusKind = k || ''; var el = $('#status'); if (el) { el.textContent = t; el.className = 'status ' + (k || ''); } }
+  function touch() { dirty = true; setStatus('Saving…', ''); clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 700); }
+  async function doSave() {
+    var json = JSON.stringify(state);
+    try { localStorage.setItem(KEY, json); } catch (e) { }
+    if (!dbh) { setStatus('Saved in this browser only', 'warn'); return; }
+    try { await dbh.doc('budget/main').set({ json: json, t: Date.now() }); setStatus('All changes saved', 'ok'); }
+    catch (e) { setStatus(e && e.code === 'invalid_argument' ? 'View only. Changes are not shared' : 'Saved in this browser only', 'warn'); }
+  }
+  async function initStore() {
+    var loaded = null, fromDb = false;
+    try {
+      if (window.claude && window.claude.use) {
+        var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 10000); });
+        dbh = await Promise.race([window.claude.use('db'), timeout]);
+      }
+    } catch (e) { dbh = null; }
+    if (dbh) {
+      try { var s = await dbh.doc('budget/main').get(); if (s.exists) { loaded = JSON.parse(s.data().json); fromDb = true; } }
+      catch (e) { }
+    }
+    if (!loaded) { try { var t = localStorage.getItem(KEY); if (t) loaded = JSON.parse(t); } catch (e) { } }
+    if (loaded && !dirty) { state = norm(loaded); render(); }
+    setStatus(dbh ? (fromDb || !loaded ? 'All changes saved' : 'Not yet saved to the shared store') : 'Saved in this browser only', dbh && (fromDb || !loaded) ? 'ok' : 'warn');
+    if (loaded && !fromDb && dbh && !dirty) touch();
+  }
+
+  /* ---------- toast / undo ---------- */
+  var toastTimer = null;
+  function toast(msg, undoFn) {
+    var t = $('#toast'); t.innerHTML = '<span>' + esc(msg) + '</span>' + (undoFn ? '<button type="button" id="undo">Undo</button>' : ''); t.hidden = false;
+    if (undoFn) $('#undo').onclick = function () { undoFn(); t.hidden = true; };
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 7000);
+  }
+  function withUndo(msg, fn) {
+    var snap = JSON.stringify(state); fn();
+    render(); touch();
+    toast(msg, function () { state = norm(JSON.parse(snap)); render(); touch(); });
+  }
+
+  /* ---------- events ---------- */
+  var app = $('#app');
+  function flagBad(t) { var x = num(t.value); t.classList.toggle('bad', x != null && isNaN(x)); }
+  app.addEventListener('input', function (ev) {
+    var t = ev.target, d = t.dataset;
+    if (d.in) {
+      var e = engOf(d.eid), v = t.value.trim(); flagBad(t);
+      var store = d.rid === 'hours' ? (d.in === 'ov' ? e.ovHours : e.actHours) : (d.in === 'ov' ? costOf(e, d.rid).ov : costOf(e, d.rid).act);
+      if (v === '') delete store[d.ym]; else store[d.ym] = v;
+      touch(); paint(); return;
+    }
+    if (d.rf && d.rf !== 'type' && d.rf !== 'month') {
+      var e2 = engOf(d.eid), c = costOf(e2, d.rid); c[d.rf] = t.value; if (d.rf === 'amount') flagBad(t);
+      touch(); if (d.rf === 'amount') paint(); return;
+    }
+    if (d.f && d.f !== 'start' && d.f !== 'end') {
+      var e3 = engOf(d.eid); e3[d.f] = t.value; if (d.f !== 'name') flagBad(t); touch(); paint(); return;
+    }
+    if (d.pf && t.type !== 'checkbox') { P()[d.pf] = t.value; if (d.pf === 'rate' || d.pf === 'hours') flagBad(t); touch(); paint(); return; }
+    if (d.pt) { var pt = P().partners[+d.k]; pt[d.pt] = d.pt === 'pct' ? t.value : t.value; if (d.pt === 'pct') { pt.pct = t.value; } touch(); paint(); }
+  });
+  app.addEventListener('change', function (ev) {
+    var t = ev.target, d = t.dataset;
+    if (d.f === 'start' || d.f === 'end') { engOf(d.eid)[d.f] = t.value; touch(); render(); return; }
+    if (d.rf === 'type' || d.rf === 'month') { costOf(engOf(d.eid), d.rid)[d.rf] = d.rf === 'month' ? parseInt(t.value, 10) : t.value; touch(); render(); return; }
+    if (d.pf === 'prorate') { P().prorate = t.checked; touch(); render(); }
+  });
+  app.addEventListener('focusout', function (ev) { if (ev.target.dataset && (ev.target.dataset.in || ev.target.dataset.rf === 'amount')) setTimeout(paint, 0); });
+
+  function newEngineer() {
+    var now = new Date(), y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
+    var s = Date.UTC(y, m, 1), e = Date.UTC(y, m + 6, 0), last = state.engineers[state.engineers.length - 1];
+    return {
+      id: uid(), name: 'Engineer ' + (state.engineers.length + 1), start: iso(s), end: iso(e), hours: '', rate: '', collapsed: false, ovHours: {}, actHours: {},
+      costs: last ? last.costs.map(function (c) { return { id: uid(), name: c.name, type: c.type, amount: c.amount, month: c.month, ov: {}, act: {} }; }) : []
+    };
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-act]'); if (!b) return;
+    var a = b.dataset.act, e = b.dataset.eid ? engOf(b.dataset.eid) : null;
+    if (a === 'toggle-actuals') { state.ui.showActuals = !state.ui.showActuals; touch(); render(); }
+    else if (a === 'toggle-eng') { e.collapsed = !e.collapsed; touch(); render(); }
+    else if (a === 'add-eng') { state.engineers.push(newEngineer()); touch(); render(); }
+    else if (a === 'dup-eng') {
+      var i = state.engineers.indexOf(e), cp = JSON.parse(JSON.stringify(e));
+      cp.id = uid(); cp.name = e.name + ' (copy)'; cp.actHours = {}; cp.costs.forEach(function (c) { c.id = uid(); c.act = {}; });
+      state.engineers.splice(i + 1, 0, cp); touch(); render();
+    }
+    else if (a === 'del-eng') withUndo('Removed ' + (e.name || 'engineer') + '.', function () { state.engineers.splice(state.engineers.indexOf(e), 1); });
+    else if (a === 'add-row') {
+      var nr = mkCost('', b.dataset.type, 0); e.costs.push(nr); focusRow = nr.id; touch(); render();
+    }
+    else if (a === 'del-row') { var cs = costOf(e, b.dataset.rid); withUndo('Removed ' + (cs.name || 'cost row') + '.', function () { e.costs.splice(e.costs.indexOf(cs), 1); }); }
+    else if (a === 'add-partner') { P().partners.push({ id: uid(), name: '', pct: 0 }); touch(); render(); }
+    else if (a === 'del-partner') withUndo('Removed partner.', function () { P().partners.splice(+b.dataset.k, 1); });
+    else if (a === 'export') exportJSON();
+    else if (a === 'import') $('#importfile').click();
+    else if (a === 'reset') {
+      if (b.dataset.armed) { withUndo('Reset to the example.', function () { state = sample(); }); }
+      else { b.dataset.armed = '1'; b.textContent = 'Click again to reset'; setTimeout(function () { var r = $('#resetbtn'); if (r) { delete r.dataset.armed; r.textContent = 'Reset to example'; } }, 4000); }
+    }
+  });
+  $('#importfile').addEventListener('change', function (ev) {
+    var f = ev.target.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try { var s = JSON.parse(rd.result); if (!s || !Array.isArray(s.engineers)) throw 0; withUndo('Imported ' + f.name + '.', function () { state = norm(s); }); }
+      catch (e) { toast('That file is not a budget export.'); }
+    };
+    rd.readAsText(f); ev.target.value = '';
+  });
+  async function exportJSON() {
+    var json = JSON.stringify(state, null, 2);
+    try {
+      var dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (dl) { await dl.save({ filename: 'engineer-budget.json', data: json }); toast('Export ready.'); return; }
+    } catch (e) { if (e && e.code === 'declined') return; }
+    try { await navigator.clipboard.writeText(json); toast('Download is not available here. The export JSON is copied to your clipboard.'); }
+    catch (e) { toast('Export is not available in this view.'); }
+  }
+
+  render();
+  initStore();
+})();
+</script>
+
+</body></html>
